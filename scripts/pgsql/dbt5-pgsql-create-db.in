@@ -13,7 +13,7 @@ usage()
 	echo "usage: create-db [-p port]"
 }
 
-PRIVILEGED=0
+PRIVILEGED=1
 
 while getopts "d:hp:" OPT; do
 	case ${OPT} in

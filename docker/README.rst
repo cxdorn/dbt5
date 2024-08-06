@@ -13,7 +13,7 @@ The quickest way to try out the kit is to run::
     
     # Open a new terminal to start the brokerage house, double check what the IP
     # address of the database containers is.
-    docker/start-brokerage-house 172.17.0.2
+    docker/start-brokerage-house 172.17.0.3
 
     # Open a new terminal to start the market exchange
     docker/start-market-exchange

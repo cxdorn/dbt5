@@ -12,5 +12,8 @@ fi
 
 DOCKER_NAME="dbt5-driver-0"
 
+# Ensure the executable has the correct permissions
+docker exec -u root -it $DOCKER_NAME chmod +x /usr/local/src/dbt5/builds/release/src/BrokerageHouse
+
 docker exec -u postgres:postgres -it $DOCKER_NAME \
-		BrokerageHouseMain -h $DBADDR -d dbt5 -o /tmp
+        /usr/local/src/dbt5/builds/release/src/BrokerageHouse -h $DBADDR -d dbt5 -o /tmp

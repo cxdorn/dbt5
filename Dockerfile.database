@@ -1,10 +1,22 @@
-From dbt5-base
+FROM dbt5-base
 
 ARG PGVERSION=${PGVERSION}
 
 WORKDIR /tmp
+
+# Centos is not supported any longer ... mirrorlist is down! Need to redirect.
+RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
+RUN sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+
+# Download PostgreSQL source tarball
 RUN curl -OL https://ftp.postgresql.org/pub/source/v${PGVERSION}/postgresql-${PGVERSION}.tar.gz
+
+# Verify the downloaded file type
+RUN file postgresql-${PGVERSION}.tar.gz
+
+# Extract the tarball
 RUN tar -C /usr/local/src -xvf postgresql-${PGVERSION}.tar.gz
+
 WORKDIR /usr/local/src/postgresql-${PGVERSION}
 RUN ./configure --prefix /usr
 RUN make install
@@ -20,7 +32,7 @@ RUN (cd builds/release && make install)
 # Build TPC-E tools.
 ARG EGENDIR="/usr/local/src/dbt5/egen"
 WORKDIR ${EGENDIR}/prj
-RUN make -f Makefile.pgsql
+RUN make -f Makefile
 
 ARG DBMS=pgsql
 ENV PATH="/usr/pgsql-${PGVERSION}/bin:$PATH"
@@ -42,8 +54,9 @@ ARG DBT5PGDATA="/opt/pgdata"
 ARG PGHOST="/tmp"
 ARG SCALE=500
 WORKDIR /tmp
+# Initialize PostgreSQL data directory, start PostgreSQL server, run dbt5-pgsql-build-db command, and stop the server
 RUN  if [ "x${DBMS}" = "xpgsql" ]; then \
-             dbt5-pgsql-build-db -c 5000 -t 5000 -s $SCALE -w 300 -- \
+             dbt5-pgsql-build-db -c 5000 -t 5000 -s $SCALE -w 300 \
                      -p "-c unix_socket_directories='/tmp'" && \
                      dbt5-pgsql-stop-db; \
      fi

@@ -7,46 +7,75 @@
 # Copyright The DBT-5 Authors
 #
 
-LOGFILE="log"
+LOGDIR="${HOME}/postgresql_logs"  # Use a directory within the user's home directory
+LOGFILE="${LOGDIR}/postgresql.log"  # Specify log file
+
 OUTDIR="."
+PARAMETERS=""
 while getopts "fo:p:" OPT; do
-	case ${OPT} in
-	f)
-		rm -f ${DBT5PGDATA}/postmaster.pid
-		;;
-	o)
-		OUTDIR=${OPTARG}
-		;;
-	p)
-		PARAMETERS=$OPTARG
-		;;
-	esac
+    case ${OPT} in
+    f)
+        rm -f ${DBT5PGDATA}/postmaster.pid
+        ;;
+    o)
+        OUTDIR=${OPTARG}
+        ;;
+    p)
+        PARAMETERS=$OPTARG
+        ;;
+    esac
 done
 
+# Debugging information
+echo "[DEBUG] LOGFILE=${LOGFILE}"
+echo "[DEBUG] OUTDIR=${OUTDIR}"
+echo "[DEBUG] PARAMETERS=${PARAMETERS}"
+echo "[DEBUG] DBT5PGDATA=${DBT5PGDATA}"
+
 if [ -z ${DBT5PGDATA} ]; then
-	echo "DBT5PGDATA not defined."
-	exit 1
+    echo "DBT5PGDATA not defined."
+    exit 1
+fi
+
+# Check if the directory exists
+if [ ! -d "${DBT5PGDATA}" ]; then
+    echo "Directory ${DBT5PGDATA} does not exist. Should be created with create-db script..."
+    exit 1
 fi
 
 if [ -f ${DBT5PGDATA}/postmaster.pid ]; then
-	echo "Database is already started."
-	exit 0
+    echo "Database is already started."
+    exit 0
 fi
 
-# We need the sleeps just in case we start pg_ctl commands too closely
-# together.  Only start pg_autovacuum if explicitly called.
+# Ensure the log directory exists
+if [ ! -d "${LOGDIR}" ]; then
+    echo "Creating log directory ${LOGDIR}..."
+    mkdir -p ${LOGDIR}
+    if [ $? -ne 0 ]; then
+        echo "[ERROR] Failed to create log directory ${LOGDIR}."
+        exit 1
+    fi
+fi
 
-sleep 1
+# Create an empty log file
+touch ${LOGFILE}
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Failed to create log file ${LOGFILE}."
+    exit 1
+fi
+
+echo "[LOG] Starting PostgreSQL server..."
 
 if [ "x${PARAMETERS}" = "x" ]; then
-	pg_ctl -w -D ${DBT5PGDATA} -l ${OUTDIR}/${LOGFILE} start
+	pg_ctl -w -D ${DBT5PGDATA} -l ${LOGFILE} start
 else
-	pg_ctl -w -D ${DBT5PGDATA} -o "${PARAMETERS}" -l ${OUTDIR}/${LOGFILE} start
+	pg_ctl -w -D ${DBT5PGDATA} -o "${PARAMETERS}" -l ${LOGFILE} start
 fi
 
-if [ ! -f ${DBT5PGDATA}/postmaster.pid ]; then
-	echo "database did not start correctly, check database log"
-	exit 1
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Failed to start PostgreSQL server. Check the log file at ${LOGFILE}."
+    exit 1
 fi
 
-exit 0
+echo "[LOG] PostgreSQL server started successfully."

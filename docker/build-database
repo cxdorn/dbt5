@@ -10,7 +10,7 @@ fi
 
 SCALE=500
 DBMS="pgsql"
-PGVERSION=10
+PGVERSION=10.15
 
 if [ $# -ge 1 ]; then
 	SCALE=$1
@@ -47,7 +47,9 @@ docker build -t dbt5-database-${DBMS}-${SCALE}s \
 		--build-arg DBMS=$DBMS \
 		--build-arg SCALE=$SCALE \
 		--shm-size=1g \
-		-f Dockerfile.database $TOPDIR
+		-f Dockerfile.database $TOPDIR \
+		--progress=plain
+		# --no-cache
 if [ $? -ne 0 ]; then
 	echo "usage: $0 [SCALE [DBMS [DBMSVER]]]"
 	echo

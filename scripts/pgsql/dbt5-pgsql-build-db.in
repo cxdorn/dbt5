@@ -221,6 +221,8 @@ while [ "${#}" -gt 0 ] ; do
 	shift
 done
 
+echo "[LOG] === DBT5 BUILD DB SCRIPT ==="
+
 if [ "x${EGENDIR}" = "x" ]; then
 	echo "EGENDIR not defined, specify EGen's directory."
 	exit 1
@@ -247,12 +249,23 @@ fi
 
 PSQL="psql -X ${PORTARG} ${DBNAMEARG}"
 
+# Log the values of PRIVILEGED and REBUILD_DB
+echo "[DEBUG] PRIVILEGED=${PRIVILEGED}, REBUILD_DB=${REBUILD_DB}"
+
+# Temporarily set PRIVILEGED and REBUILD_DB to 1 for testing
+PRIVILEGED=1
+REBUILD_DB=0
+
 if [ ${PRIVILEGED} -eq 1 ] && [ ${REBUILD_DB} -eq 1 ]; then
 	echo "Restarting the database to reset database parameters..."
 	dbt5-pgsql-stop-db
 	dbt5-pgsql-start-db -p "${PARAMETERS}" || exit 1
+    sleep 5  # Give the server time to start
 	eval dbt5-pgsql-drop-db ${PORTARG}
 fi
+
+# Add debug information
+echo "[LOG] Running dbt5-pgsql-create-db with DBNAMEARG=${DBNAMEARG} and PORTARG=${PORTARG}"
 
 eval "dbt5-pgsql-create-db ${DBNAMEARG} ${PORTARG}" || exit 1
 

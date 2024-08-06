@@ -1,7 +1,31 @@
-From dbt5-base
+FROM dbt5-base
 
-RUN yum -y install epel-release
+# Centos is not supported any longer ... mirrorlist is down! Need to redirect.
+RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
+RUN sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+
+# Clean
+RUN yum clean all
+
+# Install yum-utils to get yum-config-manager
+RUN yum -y install yum-utils
+
+# Enable the extras repository temporarily to install epel-release
+RUN yum-config-manager --enable extras && \
+    yum -y install epel-release && \
+    yum-config-manager --disable extras && \
+    yum clean all
+
+# Enable PowerTools repository for additional packages
+RUN yum-config-manager --enable powertools
+
+# Update all packages
 RUN yum -y update
+
+# Install dependencies for R
+RUN yum -y install blas-devel lapack-devel
+
+# Install R
 RUN yum -y install R
 
 ARG PGVERSION=${PGVERSION}
@@ -15,16 +39,17 @@ RUN make install
 
 COPY . /usr/local/src/dbt5
 
+# Step 23
 # Install DBT-5 for PostgreSQL.
 ARG PKG_CONFIG_PATH="/usr/lib/pkgconfig"
 WORKDIR /usr/local/src/dbt5
 RUN make -f Makefile.cmake release
-RUN (cd builds/release && make install)
+RUN cd builds/release && make
 
 # Build TPC-E tools.
 ARG EGENDIR="/usr/local/src/dbt5/egen"
 WORKDIR ${EGENDIR}/prj
-RUN make -f Makefile.pgsql
+RUN make -f Makefile
 
 RUN groupadd postgres
 RUN useradd -g postgres postgres

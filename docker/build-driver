@@ -2,41 +2,53 @@
 
 # Build a Docker image with the DBT-5 Brokerage House.
 
-which docker > /dev/null 2>&1
-if [ $? -ne 0 ]; then
-	echo "docker not in path"
-	exit 1
+# Check if Docker is installed
+if ! which docker > /dev/null 2>&1; then
+    echo "[ERROR] Docker not in path"
+    exit 1
 fi
 
-PGVERSION=14.2
+PGVERSION=10.15
 
+# Check if a PostgreSQL version is provided as an argument
 if [ $# -ge 1 ]; then
-	PGVERSION=$1
+    PGVERSION=$1
 else
-	which jq > /dev/null 2>&1
-	if [ $? -eq 0 ]; then
-		PGORG="https://www.postgresql.org/versions.json"
-		PGVERSION=$(curl -s $PGORG | jq -r 'sort | .[] | "\(.major).\(.latestMinor)"' | tail -n 1)
-	fi
+    # Check if jq is installed and fetch the latest PostgreSQL version
+    if which jq > /dev/null 2>&1; then
+        PGORG="https://www.postgresql.org/versions.json"
+        PGVERSION=$(curl -s $PGORG | jq -r 'sort | .[] | "\(.major).\(.latestMinor)"' | tail -n 1)
+        if [ -z "$PGVERSION" ]; then
+            echo "[ERROR] Failed to fetch PostgreSQL version"
+            exit 1
+        fi
+    fi
 fi
 
-echo "Using PostgreSQL Major Version $PGVERSION"
+echo "[INFO] Using PostgreSQL Major Version $PGVERSION"
 
-TOPDIR=`dirname $0`
+TOPDIR=$(dirname $0)
 
-# Use the return code from `docker inspect` to determine if the docker image
-# needs to be created.
-docker inspect dbt5-base > /dev/null
-if [ $? -ne 0 ]; then
-	${TOPDIR}/prepare-image || exit 1
+# Check if the dbt5-base Docker image exists
+if ! docker inspect dbt5-base > /dev/null 2>&1; then
+    echo "[INFO] dbt5-base image not found, creating it..."
+    if ! ${TOPDIR}/prepare-image; then
+        echo "[ERROR] Failed to create dbt5-base image"
+        exit 1
+    fi
 fi
 
 TOPDIR="${TOPDIR}/.."
 docker build -t dbt5-driver \
-		--build-arg PGVERSION=$PGVERSION \
-		-f Dockerfile.common $TOPDIR
+    --build-arg PGVERSION=$PGVERSION \
+    -f Dockerfile.common $TOPDIR \
+	--progress=plain \
+	--no-cache
+
 if [ $? -ne 0 ]; then
-	echo "usage: $0 [DBMSVER]"
-	echo
-	exit 1
+    echo "usage: $0 [DBMSVER]"
+    echo
+    exit 1
 fi
+
+echo "[INFO] dbt5-driver image built successfully"
