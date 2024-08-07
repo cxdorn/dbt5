@@ -26,27 +26,44 @@ fi
 #     $CONTAINER_TAG \
 #     make -f Makefile.cmake ${TARGET}
 
-# Create a temporary container
-CONTAINER_ID=$(podman create $CONTAINER_TAG)
-
 ########
 # ISSUE: this `start` exits immediate
 # ... you can make it work manually (`podman run` a shell, then make)
+# 1. podman run -it --rm localhost/dbt5-appimage:latest /bin/sh     
+# 2. podman ps
+# 3. podman cp (as below, with appropriate ID)
+# 4. make in container's shell
 ########
 
-# Start the container
-podman start $CONTAINER_ID
+# Create and start a temporary container with an interactive shell
+echo "Creating and starting a temporary container..."
+CONTAINER_ID=$(podman run -d -it --entrypoint /bin/sh $CONTAINER_TAG)
+echo "Container ID: $CONTAINER_ID"
 
 # Wait until the container is fully started
+echo "Waiting for the container to start..."
 while [ "$(podman inspect -f '{{.State.Status}}' $CONTAINER_ID)" != "running" ]; do
-	echo "waiting for container to start..."
+    echo "waiting for container $CONTAINER_ID to start..."
     sleep 1
 done
+echo "Container is running."
+
+# Create the necessary directory in the container
+echo "Creating directory /usr/local/src/dbt5 in the container..."
+podman exec -u root $CONTAINER_ID mkdir -p /usr/local/src/dbt5
+echo "Directory created."
 
 # Copy files into the container
-podman cp "${CONTAINER_DIR}/.." "${CONTAINER_ID}:/usr/local/src/dbt5"
+echo "Copying files into the container: \n exec cp \"${CONTAINER_DIR}/..\" \"${CONTAINER_ID}:/usr/local/src/dbt5\""
+podman cp "${CONTAINER_DIR}/.." "${CONTAINER_ID}:/usr/local/src/"
+echo "Files copied."
+
+# Verify the copied files
+echo "Verifying the copied files..."
+podman exec -u root $CONTAINER_ID ls /usr/local/src/dbt5
 
 # Run the make command inside the container
+echo "Running the make command inside the container..."
 podman exec \
     --env EGEN="${EGEN}" \
     --env PKG_CONFIG_PATH="/usr/lib/pkgconfig" \
@@ -54,12 +71,15 @@ podman exec \
     -u root \
     $CONTAINER_ID \
     make -f Makefile.cmake ${TARGET}
+echo "Make command executed."
 
 # Copy the artifacts back to the host
-podman cp "${CONTAINER_ID}:/usr/local/src/dbt5/builds/appimage" "${CONTAINER_DIR}/../builds/appimage"
+echo "Copying the artifacts back to the host..."
+podman cp "${CONTAINER_ID}:/usr/local/src/dbt5/builds/" "${CONTAINER_DIR}/../builds/"
+echo "Artifacts copied."
 
 # Clean up the temporary container
-podman rm $CONTAINER_ID
+podman rm -f $CONTAINER_ID
 
 # Ensure the artifacts are owned by the user running this
 chown -R $(id -u):$(id -g) "${CONTAINER_DIR}/../builds/appimage"
