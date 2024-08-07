@@ -8,6 +8,7 @@ fi
 CONTAINER_DIR="$(dirname "$(realpath "${0}")")"
 CONTAINER_TAG="dbt5-appimage"
 TARGET="appimage"
+EGEN=/usr/local/src/dbt5/egen/zip/tpc-e-tool.zip
 
 # Use the return code from `podman inspect` to determine if the container image
 # needs to be created.
@@ -15,21 +16,60 @@ if ! podman inspect ${CONTAINER_TAG} > /dev/null 2>&1; then
 	"${CONTAINER_DIR}/build-appimage-container" || exit 1
 fi
 
-podman run \
-		--rm \
-		-v "${CONTAINER_DIR}/..:/usr/local/src/dbt5:rw,Z" \
-		--env EGEN="${EGEN}" \
-		--env PKG_CONFIG_PATH="/usr/lib/pkgconfig" \
-		-w /usr/local/src/dbt5 \
-		$CONTAINER_TAG \
-		make -f Makefile.cmake ${TARGET}
+# podman run \
+#     --rm \
+#     -v "${CONTAINER_DIR}/..:/usr/local/src/dbt5:rw,Z" \
+#     --env EGEN="${EGEN}" \
+#     --env PKG_CONFIG_PATH="/usr/lib/pkgconfig" \
+#     -w /usr/local/src/dbt5 \
+#     -u root \
+#     $CONTAINER_TAG \
+#     make -f Makefile.cmake ${TARGET}
+
+# Create a temporary container
+CONTAINER_ID=$(podman create $CONTAINER_TAG)
+
+########
+# ISSUE: this `start` exits immediate
+# ... you can make it work manually (`podman run` a shell, then make)
+########
+
+# Start the container
+podman start $CONTAINER_ID
+
+# Wait until the container is fully started
+while [ "$(podman inspect -f '{{.State.Status}}' $CONTAINER_ID)" != "running" ]; do
+	echo "waiting for container to start..."
+    sleep 1
+done
+
+# Copy files into the container
+podman cp "${CONTAINER_DIR}/.." "${CONTAINER_ID}:/usr/local/src/dbt5"
+
+# Run the make command inside the container
+podman exec \
+    --env EGEN="${EGEN}" \
+    --env PKG_CONFIG_PATH="/usr/lib/pkgconfig" \
+    -w /usr/local/src/dbt5 \
+    -u root \
+    $CONTAINER_ID \
+    make -f Makefile.cmake ${TARGET}
+
+# Copy the artifacts back to the host
+podman cp "${CONTAINER_ID}:/usr/local/src/dbt5/builds/appimage" "${CONTAINER_DIR}/../builds/appimage"
+
+# Clean up the temporary container
+podman rm $CONTAINER_ID
+
+# Ensure the artifacts are owned by the user running this
+chown -R $(id -u):$(id -g) "${CONTAINER_DIR}/../builds/appimage"
 
 # I wonder if there is a better way to make sure the artifacts are all owned by
 # the user running this.
-podman run \
-		--rm \
-		-v "${CONTAINER_DIR}/..:/usr/local/src/dbt5:rw,Z" \
-		-w /usr/local/src/dbt5 \
-		-u root \
-		${CONTAINER_TAG} \
-		chown -R root:root builds/appimage/
+# podman run \
+# 		--rm \
+# 		-v "${CONTAINER_DIR}/..:/usr/local/src/dbt5:rw,Z" \
+# 		-w /usr/local/src/dbt5 \
+# 		-u root \
+# 		${CONTAINER_TAG} \
+# 		chown -R root:root builds/appimage/
